@@ -1,0 +1,195 @@
+/* MMM-DoneTick Styles */
+
+.MMM-DoneTick {
+  font-size: 0.9em;
+}
+
+/* ── Flat table ─────────────────────────────────────────── */
+
+.donetick-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.donetick-row {
+  line-height: 1.6;
+}
+
+.donetick-icon {
+  width: 1.5em;
+  text-align: center;
+  padding-right: 6px;
+  font-size: 0.9em;
+}
+
+.donetick-name {
+  padding-right: 12px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.donetick-date {
+  text-align: right;
+  white-space: nowrap;
+  font-size: 0.85em;
+}
+
+/* ── Status colors ──────────────────────────────────────── */
+
+.donetick-overdue .donetick-name,
+.donetick-overdue .donetick-icon {
+  color: #ff6b6b;
+}
+
+.donetick-overdue-text {
+  color: #ff6b6b;
+  font-weight: bold;
+}
+
+.donetick-today .donetick-name {
+  color: #ffd700;
+}
+
+.donetick-today-text {
+  color: #ffd700;
+  font-weight: bold;
+}
+
+.donetick-tomorrow-text {
+  color: #90ee90;
+}
+
+/* ── Labels ─────────────────────────────────────────────── */
+
+.donetick-label-row {
+  line-height: 1.2;
+}
+
+.donetick-labels {
+  padding-bottom: 6px;
+  padding-left: 1.5em;
+}
+
+.donetick-labels-indented {
+  padding-left: 18px; /* aligns under grouped chore name */
+}
+
+.donetick-label {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 0.7em;
+  margin-right: 4px;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Error ──────────────────────────────────────────────── */
+
+.donetick-error {
+  color: #ff6b6b;
+  padding: 8px 0;
+}
+
+/* ── Grouped / by-assignee view ─────────────────────────── */
+
+.donetick-grouped {
+  width: 100%;
+}
+
+.donetick-group {
+  margin-bottom: 4px;
+}
+
+.donetick-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 2px;
+}
+
+.donetick-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.65em;
+  font-weight: bold;
+  letter-spacing: 0;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.donetick-group-name {
+  flex: 1;
+  font-size: 0.95em;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.donetick-badge {
+  font-size: 0.65em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.donetick-badge-overdue {
+  border-color: rgba(255, 107, 107, 0.5);
+  color: #ff6b6b;
+}
+
+.donetick-badge-count {
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.donetick-toggle {
+  font-size: 0.75em;
+  color: rgba(255, 255, 255, 0.4);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+/* Collapsed state hides the chores container */
+.donetick-group-collapsed .donetick-group-chores {
+  display: none;
+}
+
+.donetick-group-table {
+  width: 100%;
+}
+
+.donetick-group-row {
+  line-height: 1.5;
+}
+
+/* Left status bar (replaces icon in grouped view) */
+.donetick-status-bar-cell {
+  width: 6px;
+  padding: 0 6px 0 4px;
+}
+
+.donetick-status-bar {
+  width: 3px;
+  height: 1.2em;
+  border-radius: 2px;
+  margin: auto;
+}
+
+.donetick-bar-overdue { background: #ff6b6b; }
+.donetick-bar-today   { background: #ffd700; }
+.donetick-bar-normal  { background: rgba(255, 255, 255, 0.2); }
