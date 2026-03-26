@@ -1,22 +1,30 @@
+/**
+ * MagicMirror² Module: MMM-DoneTick
+ * A module to display upcoming chores from DoneTick (donetick.com).
+ */
 Module.register("MMM-DoneTick", {
+  // Default configuration options
   defaults: {
-    instanceUrl: "https://app.donetick.com", // or your self-hosted URL
-    apiToken: "",                             // your DoneTick API token (secretkey)
-    maxChores: 10,                            // max number of chores to show
-    updateInterval: 10 * 60 * 1000,          // refresh every 10 minutes
-    showOverdue: true,                        // show overdue chores
-    daysAhead: 7,                             // show chores due within X days
-    showLabels: true,                         // show chore labels
-    title: "Upcoming Chores",
-    fadePoint: 0.25,                          // fraction of list to start fading (0–1); flat view only
+    instanceUrl: "https://app.donetick.com", // Base URL for the DoneTick instance
+    apiToken: "",                             // API Secret Key from DoneTick settings
+    maxChores: 10,                            // Maximum number of chores to display
+    updateInterval: 10 * 60 * 1000,           // Polling interval (default 10 minutes)
+    showOverdue: true,                        // Whether to include chores whose due date has passed
+    daysAhead: 7,                             // Only show chores due within this many days
+    showLabels: true,                         // Toggle display of chore labels/tags
+    title: "Upcoming Chores",                 // Header text for the module
+    fadePoint: 0.25,                          // At what point in the list to start fading (0.0 - 1.0)
 
     // --- Grouping ---
-    groupBy: "date",                          // "date" or "assignee"
-    userMap: {},                              // map DoneTick user IDs to display names: { 1: "Alex", 2: "Jordan" }
-    collapsible: false,                       // allow assignee sections to be collapsed (click header)
-    // Groups are ordered: assignees with overdue chores appear first, then by earliest due date.
+    groupBy: "date",                          // Display mode: "date" (flat list) or "assignee" (grouped)
+    userMap: {},                              // Mapping of ID strings to Names: { "1": "Logan" }
+    collapsible: false,                       // If true, allows clicking assignee headers to hide chores
   },
 
+  /**
+   * Returns the list of CSS files to load.
+   * @returns {string[]} List of filenames.
+   */
   getStyles() {
     return ["MMM-DoneTick.css"];
   },
@@ -24,24 +32,32 @@ Module.register("MMM-DoneTick", {
   start() {
     Log.info("[MMM-DoneTick] Starting module");
     Log.info(`[MMM-DoneTick] Config: instanceUrl=${this.config.instanceUrl}, groupBy=${this.config.groupBy}, daysAhead=${this.config.daysAhead}, maxChores=${this.config.maxChores}`);
+    
     if (!this.config.apiToken) {
       Log.error("[MMM-DoneTick] WARNING: apiToken is empty — module will not be able to fetch chores.");
     }
+
+    // Internal state initialization
     this.chores = [];
     this.loaded = false;
     this.error = null;
-    this.collapsedGroups = {};
+    this.collapsedGroups = {}; // Tracks toggle state for assignee groups
     this.scheduleUpdate();
   },
 
+  /**
+   * Sets up the initial fetch and the periodic refresh timer.
+   */
   scheduleUpdate() {
     Log.info(`[MMM-DoneTick] Scheduling updates every ${this.config.updateInterval / 1000}s`);
     this.fetchChores();
     setInterval(() => this.fetchChores(), this.config.updateInterval);
   },
 
+  /**
+   * Requests data from the node_helper.
+   */
   fetchChores() {
-    Log.info("[MMM-DoneTick] Sending FETCH_CHORES to node_helper...");
     this.sendSocketNotification("FETCH_CHORES", {
       instanceUrl: this.config.instanceUrl,
       apiToken: this.config.apiToken,
@@ -66,35 +82,42 @@ Module.register("MMM-DoneTick", {
 
   // ─── Filtering & Sorting ──────────────────────────────────────────────────
 
+  /**
+   * Filters chores based on active status, due date window, and max count.
+   * @param {Object[]} chores - Raw chore objects from the API.
+   * @returns {Object[]} Cleaned and sorted chores.
+   */
   filterAndSortChores(chores) {
     const now = new Date();
-    const cutoff = new Date(now.getTime() + this.config.daysAhead * 24 * 60 * 60 * 1000);
+    const cutoff = new Date();
+    cutoff.setDate(now.getDate() + this.config.daysAhead);
 
-    const active    = chores.filter(c => c.isActive);
-    const hasDue    = active.filter(c => c.nextDueDate);
-    const inWindow  = hasDue.filter(c => {
-      const due = new Date(c.nextDueDate);
-      if (!this.config.showOverdue && due < now) return false;
-      if (due > cutoff) return false;
-      return true;
+    const inWindow = chores.filter(chore => {
+      if (!chore.isActive || !chore.nextDueDate) return false;
+      const due = new Date(chore.nextDueDate);
+      
+      const isOverdue = due < now;
+      // Drop if overdue and config says no
+      if (!this.config.showOverdue && isOverdue) return false;
+      
+      // Ensure it falls within the future window
+      return due <= cutoff || (isOverdue && this.config.showOverdue);
     });
-
-    Log.info(`[MMM-DoneTick] Filter breakdown — total: ${chores.length}, active: ${active.length}, has due date: ${hasDue.length}, in window: ${inWindow.length}`);
 
     if (inWindow.length === 0 && chores.length > 0) {
       Log.warn(`[MMM-DoneTick] All chores were filtered out. Check daysAhead (${this.config.daysAhead}) and showOverdue (${this.config.showOverdue}).`);
     }
 
-    return inWindow
-      .sort((a, b) => new Date(a.nextDueDate) - new Date(b.nextDueDate))
-      .slice(0, this.config.maxChores);
+    return inWindow.sort((a, b) => new Date(a.nextDueDate) - new Date(b.nextDueDate)).slice(0, this.config.maxChores);
   },
 
   // ─── Grouping helpers ─────────────────────────────────────────────────────
 
   /**
    * Returns an array of { assigneeId, displayName, chores[], hasOverdue, earliest }
-   * ordered so that groups with overdue chores come first, then by earliest due date.
+   * Groups are ordered so that assignees with overdue tasks appear at the top.
+   * @param {Object[]} chores - Array of chore objects.
+   * @returns {Object[]} Grouped data structures.
    */
   groupChoresByAssignee(chores) {
     const now = new Date();
@@ -108,15 +131,18 @@ Module.register("MMM-DoneTick", {
 
     return Object.entries(groups)
       .map(([id, groupChores]) => {
+        // Calculate metadata for the group header
         const hasOverdue = groupChores.some((c) => new Date(c.nextDueDate) < now);
         const earliest = Math.min(...groupChores.map((c) => new Date(c.nextDueDate)));
         const displayName =
           this.config.userMap[id] ||
           this.config.userMap[Number(id)] ||
           (id === "unassigned" ? "Unassigned" : `User ${id}`);
+
         return { assigneeId: id, displayName, chores: groupChores, hasOverdue, earliest };
       })
       .sort((a, b) => {
+        // Sort groups: Overdue assignees first, then by soonest task
         if (a.hasOverdue !== b.hasOverdue) return a.hasOverdue ? -1 : 1;
         return a.earliest - b.earliest;
       });
@@ -124,6 +150,10 @@ Module.register("MMM-DoneTick", {
 
   // ─── DOM Entry Point ──────────────────────────────────────────────────────
 
+  /**
+   * Primary MagicMirror method to generate the module's HTML.
+   * @returns {HTMLElement} The wrapper element.
+   */
   getDom() {
     const wrapper = document.createElement("div");
     wrapper.className = "MMM-DoneTick";
@@ -157,6 +187,11 @@ Module.register("MMM-DoneTick", {
     return wrapper;
   },
 
+  /**
+   * Generates a simple message element for loading/errors.
+   * @param {string} text 
+   * @returns {HTMLElement}
+   */
   makeMessage(text) {
     const el = document.createElement("div");
     el.className = "dimmed light small";
@@ -166,34 +201,19 @@ Module.register("MMM-DoneTick", {
 
   // ─── Flat (by-date) view ──────────────────────────────────────────────────
 
+  /**
+   * Builds the standard table view where all chores are listed together by date.
+   * @returns {HTMLElement} The table element.
+   */
   buildFlatView() {
     const table = document.createElement("table");
     table.className = "small donetick-table";
 
     this.chores.forEach((chore, index) => {
       const { isOverdue, isToday, isTomorrow } = this.choreStatus(chore);
-
-      const row = document.createElement("tr");
-      row.className = "donetick-row";
+      const row = this.createChoreRow(chore, { isOverdue, isToday, isTomorrow });
+      
       this.applyFade(row, index, this.chores.length);
-
-      // Icon
-      const iconCell = document.createElement("td");
-      iconCell.className = "donetick-icon";
-      if (isOverdue) { iconCell.innerHTML = "⚠️"; row.classList.add("donetick-overdue"); }
-      else if (isToday) { iconCell.innerHTML = "🔔"; row.classList.add("donetick-today"); }
-      else { iconCell.innerHTML = "📋"; }
-      row.appendChild(iconCell);
-
-      // Name
-      const nameCell = document.createElement("td");
-      nameCell.className = "donetick-name bright";
-      nameCell.innerHTML = chore.name;
-      row.appendChild(nameCell);
-
-      // Date
-      row.appendChild(this.makeDateCell(isOverdue, isToday, isTomorrow, chore));
-
       table.appendChild(row);
       this.maybeAppendLabels(table, chore, 3);
     });
@@ -203,6 +223,10 @@ Module.register("MMM-DoneTick", {
 
   // ─── Grouped (by-assignee) view ───────────────────────────────────────────
 
+  /**
+   * Builds the view where chores are categorized under assignee headers.
+   * @returns {HTMLElement} The container element.
+   */
   buildGroupedView() {
     const container = document.createElement("div");
     container.className = "donetick-grouped";
@@ -217,36 +241,14 @@ Module.register("MMM-DoneTick", {
       const header = document.createElement("div");
       header.className = "donetick-group-header";
 
-      const initials = displayName
-        .split(" ")
-        .map((w) => w[0].toUpperCase())
-        .slice(0, 2)
-        .join("");
-
-      const avatar = document.createElement("span");
-      avatar.className = "donetick-avatar";
-      avatar.innerHTML = initials;
-      header.appendChild(avatar);
+      header.appendChild(this.createAvatar(displayName));
 
       const nameSpan = document.createElement("span");
       nameSpan.className = "donetick-group-name bright";
       nameSpan.innerHTML = displayName;
       header.appendChild(nameSpan);
 
-      if (hasOverdue) {
-        const overdueBadge = document.createElement("span");
-        overdueBadge.className = "donetick-badge donetick-badge-overdue";
-        const overdueCount = chores.filter(
-          (c) => new Date(c.nextDueDate) < new Date()
-        ).length;
-        overdueBadge.innerHTML = `${overdueCount} overdue`;
-        header.appendChild(overdueBadge);
-      }
-
-      const countBadge = document.createElement("span");
-      countBadge.className = "donetick-badge donetick-badge-count";
-      countBadge.innerHTML = `${chores.length} task${chores.length !== 1 ? "s" : ""}`;
-      header.appendChild(countBadge);
+      this.appendGroupBadges(header, chores, hasOverdue);
 
       // Collapse toggle (only wired up if collapsible: true)
       if (this.config.collapsible) {
@@ -261,6 +263,7 @@ Module.register("MMM-DoneTick", {
         }
 
         header.style.cursor = "pointer";
+        // Local interaction for toggling visibility without a full DOM refresh
         header.addEventListener("click", () => {
           this.collapsedGroups[assigneeId] = !this.collapsedGroups[assigneeId];
           section.classList.toggle("donetick-group-collapsed");
@@ -281,32 +284,7 @@ Module.register("MMM-DoneTick", {
 
       chores.forEach((chore) => {
         const { isOverdue, isToday, isTomorrow } = this.choreStatus(chore);
-
-        const row = document.createElement("tr");
-        row.className = "donetick-row donetick-group-row";
-        if (isOverdue) row.classList.add("donetick-overdue");
-        else if (isToday) row.classList.add("donetick-today");
-
-        // Colored left-bar replaces icon in grouped view
-        const barCell = document.createElement("td");
-        barCell.className = "donetick-status-bar-cell";
-        const bar = document.createElement("div");
-        bar.className = "donetick-status-bar " + (
-          isOverdue ? "donetick-bar-overdue" :
-          isToday   ? "donetick-bar-today"   :
-                      "donetick-bar-normal"
-        );
-        barCell.appendChild(bar);
-        row.appendChild(barCell);
-
-        // Name
-        const nameCell = document.createElement("td");
-        nameCell.className = "donetick-name bright";
-        nameCell.innerHTML = chore.name;
-        row.appendChild(nameCell);
-
-        // Date
-        row.appendChild(this.makeDateCell(isOverdue, isToday, isTomorrow, chore));
+        const row = this.createChoreRow(chore, { isOverdue, isToday, isTomorrow }, true);
 
         table.appendChild(row);
         this.maybeAppendLabels(table, chore, 3, true);
@@ -322,6 +300,92 @@ Module.register("MMM-DoneTick", {
 
   // ─── Shared helpers ───────────────────────────────────────────────────────
 
+  /**
+   * Creates a single table row for a chore.
+   * @param {Object} chore - The chore data.
+   * @param {Object} status - Pre-calculated status flags.
+   * @param {boolean} isGrouped - Whether this is being rendered inside an assignee group.
+   * @returns {HTMLElement} The <tr> element.
+   */
+  createChoreRow(chore, { isOverdue, isToday, isTomorrow }, isGrouped = false) {
+    const row = document.createElement("tr");
+    row.className = `donetick-row ${isGrouped ? "donetick-group-row" : ""}`;
+    
+    if (isOverdue) row.classList.add("donetick-overdue");
+    else if (isToday) row.classList.add("donetick-today");
+
+    // Icon or Status Bar
+    const iconCell = document.createElement("td");
+    // Grouped view uses a vertical color bar; Flat view uses emojis/icons.
+    if (isGrouped) {
+      iconCell.className = "donetick-status-bar-cell";
+      const bar = document.createElement("div");
+      bar.className = `donetick-status-bar ${isOverdue ? "donetick-bar-overdue" : isToday ? "donetick-bar-today" : "donetick-bar-normal"}`;
+      iconCell.appendChild(bar);
+    } else {
+      iconCell.className = "donetick-icon";
+      iconCell.innerHTML = isOverdue ? "⚠️" : (isToday ? "🔔" : "📋");
+    }
+    row.appendChild(iconCell);
+
+    // Name
+    const nameCell = document.createElement("td");
+    nameCell.className = "donetick-name bright";
+    nameCell.innerHTML = chore.name;
+    row.appendChild(nameCell);
+
+    // Date
+    row.appendChild(this.makeDateCell(isOverdue, isToday, isTomorrow, chore));
+    
+    return row;
+  },
+
+  /**
+   * Creates a circle with initials for the assignee.
+   * @param {string} name 
+   * @returns {HTMLElement}
+   */
+  createAvatar(name) {
+    const initials = name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+    const avatar = document.createElement("span");
+    avatar.className = "donetick-avatar";
+    avatar.innerHTML = initials;
+    return avatar;
+  },
+
+  /**
+   * Creates a small badge element.
+   * @param {string} text 
+   * @param {string} className 
+   * @returns {HTMLElement}
+   */
+  createBadge(text, className) {
+    const badge = document.createElement("span");
+    badge.className = `donetick-badge ${className}`;
+    badge.innerHTML = text;
+    return badge;
+  },
+
+  /**
+   * Adds overdue and total task counts to a group header.
+   * @param {HTMLElement} container 
+   * @param {Object[]} chores 
+   * @param {boolean} hasOverdue 
+   */
+  appendGroupBadges(container, chores, hasOverdue) {
+    if (hasOverdue) {
+      const overdueCount = chores.filter(c => new Date(c.nextDueDate) < new Date()).length;
+      container.appendChild(this.createBadge(`${overdueCount} overdue`, "donetick-badge-overdue"));
+    }
+    const taskText = `${chores.length} task${chores.length !== 1 ? "s" : ""}`;
+    container.appendChild(this.createBadge(taskText, "donetick-badge-count"));
+  },
+
+  /**
+   * Determines the relative timing of a chore's due date.
+   * @param {Object} chore 
+   * @returns {Object} Helper flags for styling.
+   */
   choreStatus(chore) {
     const now = new Date();
     const dueDate = new Date(chore.nextDueDate);
@@ -335,6 +399,10 @@ Module.register("MMM-DoneTick", {
     };
   },
 
+  /**
+   * Formats and creates the date cell for a chore row.
+   * @returns {HTMLElement}
+   */
   makeDateCell(isOverdue, isToday, isTomorrow, chore) {
     const cell = document.createElement("td");
     cell.className = "donetick-date dimmed";
@@ -350,6 +418,13 @@ Module.register("MMM-DoneTick", {
     return cell;
   },
 
+  /**
+   * Creates a secondary row for labels (tags) if they exist.
+   * @param {HTMLElement} table 
+   * @param {Object} chore 
+   * @param {number} colSpan - Number of columns in the parent table.
+   * @param {boolean} indented - Whether to shift labels right for alignment.
+   */
   maybeAppendLabels(table, chore, colSpan, indented = false) {
     if (!this.config.showLabels) return;
     if (!chore.labelsV2 || chore.labelsV2.length === 0) return;
@@ -372,6 +447,12 @@ Module.register("MMM-DoneTick", {
     table.appendChild(labelRow);
   },
 
+  /**
+   * Progressively reduces opacity of rows at the end of the list.
+   * @param {HTMLElement} row 
+   * @param {number} index 
+   * @param {number} total 
+   */
   applyFade(row, index, total) {
     if (this.config.fadePoint >= 1) return;
     const fadeStart = Math.round(total * (1 - this.config.fadePoint));
@@ -381,6 +462,11 @@ Module.register("MMM-DoneTick", {
     }
   },
 
+  /**
+   * Formats the date string.
+   * @param {Date} date 
+   * @returns {string} Relative or absolute date string.
+   */
   formatDate(date) {
     const diffDays = Math.ceil((date - new Date()) / (1000 * 60 * 60 * 24));
     if (diffDays <= 7) {
