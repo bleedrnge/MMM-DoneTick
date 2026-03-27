@@ -1,27 +1,13 @@
 {
   "name": "mmm-donetick",
   "version": "1.0.0",
-  "description": "A MagicMirror² module to display upcoming chores from DoneTick",
-  "main": "MMM-DoneTick.js",
-  "keywords": [
-    "magicmirror",
-    "magicmirror2",
-    "magicmirror-module",
-    "donetick",
-    "chores",
-    "tasks"
-  ],
-  "author": "bleedrnge",
-  "license": "MIT",
-  "engines": {
-    "node": ">=18.0.0"
+  "description": "MagicMirror² Module: MMM-DoneTick",
+  "scripts": {
+    "test": "jest"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/bleedrnge/MMM-DoneTick"
-  },
-  "bugs": {
-    "url": "https://github.com/bleedrnge/MMM-DoneTick/issues"
-  },
-  "homepage": "https://github.com/bleedrnge/MMM-DoneTick#readme"
+  "devDependencies": {
+    "jest": "^30.0.0",
+    "jest-environment-jsdom": "^30.0.0",
+    "jsdom": "^26.0.0"
+  }
 }

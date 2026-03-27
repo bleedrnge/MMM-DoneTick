@@ -1,0 +1,10 @@
+{
+  "LOADING": "Loading chores...",
+  "NO_CHORES": "No upcoming chores 🎉",
+  "ERROR": "Error",
+  "OVERDUE": "Overdue",
+  "TODAY": "Today",
+  "TOMORROW": "Tomorrow",
+  "TASKS": "tasks",
+  "TASK": "task"
+}

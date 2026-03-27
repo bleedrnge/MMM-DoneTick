@@ -1,0 +1,10 @@
+{
+  "LOADING": "Cargando tareas...",
+  "NO_CHORES": "No hay tareas próximas 🎉",
+  "ERROR": "Error",
+  "OVERDUE": "Atrasado",
+  "TODAY": "Hoy",
+  "TOMORROW": "Mañana",
+  "TASKS": "tareas",
+  "TASK": "tarea"
+}

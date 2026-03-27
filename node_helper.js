@@ -3,6 +3,7 @@
  * Handles server-side API requests to fetch chore data.
  */
 const NodeHelper = require("node_helper");
+const DoneTickClient = require("./src/api_client");
 
 module.exports = NodeHelper.create({
   /**
@@ -19,68 +20,26 @@ module.exports = NodeHelper.create({
    */
   socketNotificationReceived(notification, payload) {
     if (notification === "FETCH_CHORES") {
-      console.log(`[MMM-DoneTick] Received FETCH_CHORES notification.`);
       this.fetchChores(payload.instanceUrl, payload.apiToken);
     }
   },
 
   /**
-   * Fetches chores from the specified instance URL using the provided API token.
+   * Fetches chores using the DoneTickClient.
    * @param {string} instanceUrl - The base URL of the chore API instance.
    * @param {string} apiToken - The secret key used for authentication.
    */
   async fetchChores(instanceUrl, apiToken) {
-    if (!apiToken) {
-      console.error("[MMM-DoneTick] No API token configured — set apiToken in your config.");
-      this.sendSocketNotification("CHORES_ERROR", "No API token configured. Please set apiToken in config.");
-      return;
-    }
-
-    const fullUrl = `${instanceUrl.replace(/\/$/, "")}/eapi/v1/chore`;
-    console.log(`[MMM-DoneTick] Fetching chores from: ${fullUrl}`);
+    const client = new DoneTickClient(instanceUrl, apiToken);
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      const response = await fetch(fullUrl, {
-        method: "GET",
-        headers: {
-          "secretkey": apiToken,
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-        },
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-      console.log(`[MMM-DoneTick] Response status: ${response.status}`);
-
-      if (response.status === 200) {
-        const chores = await response.json();
-        
-        if (!Array.isArray(chores)) {
-          throw new Error("Unexpected API response format: Expected an array.");
-        }
-
-        console.log(`[MMM-DoneTick] Successfully fetched ${chores.length} chore(s).`);
-        this.sendSocketNotification("CHORES_DATA", chores);
-      } else if (response.status === 401) {
-        throw new Error("Invalid API token (401 Unauthorized).");
-      } else if (response.status === 403) {
-        throw new Error("Access denied (403 Forbidden).");
-      } else {
-        throw new Error(`API request failed with status ${response.status}.`);
-      }
-
+      console.log(`[MMM-DoneTick] Fetching chores from: ${instanceUrl}`);
+      const chores = await client.fetchChores();
+      console.log(`[MMM-DoneTick] Successfully fetched ${chores.length} chore(s).`);
+      this.sendSocketNotification("CHORES_DATA", chores);
     } catch (error) {
-      let errorMessage = error.message;
-      if (error.name === "AbortError") {
-        errorMessage = "Request timed out after 10 seconds.";
-      }
-      
-      console.error(`[MMM-DoneTick] Error: ${errorMessage}`);
-      this.sendSocketNotification("CHORES_ERROR", errorMessage);
+      console.error(`[MMM-DoneTick] Error: ${error.message}`);
+      this.sendSocketNotification("CHORES_ERROR", error.message);
     }
   },
 });
